@@ -6,6 +6,7 @@
 #define PWM_SIGNAL 5
 #define INTERRUPT_PIN_TASK2 0
 #define INTERRUPT_PIN_TASK3 2
+#define CPU_PIN 8
 #define TRUE 1
 #define FALSE 0
 #define STACK_SIZE_DEBUG 0
@@ -31,6 +32,8 @@ FrequencyData myData;
 //Time to toggle LED:
 unsigned long eventSentTime;
 unsigned long togglingTime;
+
+const int CPU_frequency = 1800;
 
 SemaphoreHandle_t frequencySemaphore;
 QueueHandle_t eventQueue;
@@ -135,7 +138,10 @@ int compute_frequency(){
 void CPU_work(int time){
   TickType_t tickPeriod = pdMS_TO_TICKS(time);
   TickType_t initialTickTime = xTaskGetTickCount();
-  while(xTaskGetTickCount() - initialTickTime < tickPeriod){}
+  int counts = CPU_frequency * time / 1000;
+  for (int i = 0; i<counts; i++){
+    digitalWrite(CPU_PIN, LOW); // Dummy action to use the CPU
+  }
 }
 
 void printStackUsage(int taskID, int stack){
@@ -182,12 +188,16 @@ void task2(void *pvParameters){
   int stackSize;
 
   unsigned long startTask;
+  unsigned long tmpStartTask;
   while(1){
+    tmpStartTask = startTask;
     startTask = millis();
+    //Serial.println(startTask - tmpStartTask);
     if(xSemaphoreTake(frequencySemaphore, pdMS_TO_TICKS(2))){
       attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN_TASK2), ISR, RISING);
       myData.frequencyTask2 = compute_frequency();
       detachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN_TASK2));
+      //Serial.println(myData.frequencyTask2);
       xSemaphoreGive(frequencySemaphore);
     }
     if(millis() - startTask > periodT2){
@@ -207,15 +217,19 @@ void task3(void *pvParameters){
   int stackSize;
 
   unsigned long startTask;
+  unsigned long tmpStartTask;
   while(1){
+    tmpStartTask = startTask;
     startTask = millis();
+    //Serial.println(startTask-tmpStartTask);
     if(xSemaphoreTake(frequencySemaphore, pdMS_TO_TICKS(1))){
       attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN_TASK3), ISR, RISING);
       myData.frequencyTask3 = compute_frequency();
       detachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN_TASK3));
+      //Serial.println(myData.frequencyTask3);
       xSemaphoreGive(frequencySemaphore);
     }
-    if(millis() - startTask > periodT3){
+    if(millis() - startTask > periodT3*1000){
       deadlineViolation(T3);
     }
     stackHighWaterMark = uxTaskGetStackHighWaterMark(taskHandle);
@@ -254,6 +268,7 @@ void task4(void *pvParameters){
     }
     tmpBuffer[bufferSize] = buffer[bufferSize];
     averageAnalogueIn /= bufferSize;
+    //Serial.println(averageAnalogueIn);
 
     if(averageAnalogueIn >= halfAnalogueRange){
       errorLedState = TRUE;
@@ -307,6 +322,8 @@ void task5(void *pvParameters){
       rangedFreq = String(frequencyT2) + ","  + String(frequencyT3);
       Serial.println(unrangedFreq);
       Serial.println(rangedFreq);
+      //Serial.printf("%d,%d \n", myData.frequencyTask2, myData.frequencyTask3);
+      //Serial.printf("%f,%f \n", frequencyT2, frequencyT3);
       xSemaphoreGive(frequencySemaphore);
     }
 
