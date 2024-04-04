@@ -129,7 +129,7 @@ int compute_frequency(){
   unsigned long timeInit = millis();
   while(flag<trials && millis() - timeInit < timeout){}
   frequency = secondsToMicros/period;
-  return frequency; 
+  return frequency;
 }
 
 void CPU_work(int time){
